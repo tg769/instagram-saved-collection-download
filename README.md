@@ -175,11 +175,11 @@ Each downloaded post includes a JSON file with:
 
 ## Privacy & Ethics
 
-- ✅ Downloads only content **you** have saved
-- ✅ Uses **your own** session cookie
-- ✅ All data stays on **your machine**
-- ✅ No passwords required or stored
-- ✅ Respects rate limits automatically
+-  Downloads only content **you** have saved
+-  Uses **your own** session cookie
+-  All data stays on **your machine**
+-  No passwords required or stored
+-  Respects rate limits automatically
 
 This tool is for **personal archival** purposes only. Use responsibly and in accordance with Instagram's Terms of Service.
 
@@ -195,7 +195,7 @@ Created by [tg769](https://github.com/tg769)
 
 Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/tg769/instagram-saved-collection-download/issues).
 
-## Support
+## Support 
 
 If you find this tool helpful, please ⭐ star the repository!
 
