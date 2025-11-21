@@ -4,14 +4,13 @@ A Python tool to download all your saved Instagram posts (photos, videos, reels,
 
 ## Features
 
-- 📥 **Collection Selection** - Choose specific collections or download all saved posts
-- 🎬 **All Media Types** - Supports photos, videos, reels, and carousel albums
-- 📊 **Metadata Export** - Saves captions, hashtags, audio info, and timestamps as JSON
-- 🔄 **Smart Tracking** - Automatically skips previously downloaded content
-- 📁 **Organized Storage** - Files sorted by media type (photos/videos/albums)
-- 📦 **ZIP Backups** - Creates compressed archives of your downloads
-- 🚀 **Progress Tracking** - Real-time progress bars and statistics
-- 🖥️ **Dual Interface** - Command-line (CLI) and graphical (GUI) options
+-  **Collection Selection** - Choose specific collections or download all saved posts
+-  **All Media Types** - Supports photos, videos, reels, and carousel albums
+-  **Metadata Export** - Saves captions, hashtags, audio info, and timestamps as JSON
+-  **Smart Tracking** - Automatically skips previously downloaded content
+-  **Organized Storage** - Files sorted by media type (photos/videos/albums)
+-  **ZIP Backups** - Creates compressed archives of your downloads
+-  **Progress Tracking** - Real-time progress bars and statistics
 
 ## Requirements
 
