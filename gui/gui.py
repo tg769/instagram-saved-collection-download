@@ -37,6 +37,9 @@ class InstagramDownloaderGUI:
         
         # Variables
         self.is_downloading = False
+        self.collections = {}
+        self.ig_client = None
+        self.fetcher = None
         
         # Create UI
         self.create_widgets()
@@ -74,14 +77,47 @@ class InstagramDownloaderGUI:
         instruction_label = ttk.Label(input_frame, text=instructions, foreground="gray")
         instruction_label.pack(anchor=tk.W, pady=5)
         
+        # Login button
+        login_btn_frame = ttk.Frame(input_frame)
+        login_btn_frame.pack(fill=tk.X, pady=5)
+        
+        self.login_btn = ttk.Button(
+            login_btn_frame,
+            text="🔐 Login & Fetch Collections",
+            command=self.fetch_collections
+        )
+        self.login_btn.pack(side=tk.LEFT)
+        
+        # Collection selection
+        collection_frame = ttk.LabelFrame(self.root, text="Collection Selection", padding="10")
+        collection_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Label(collection_frame, text="Select Collection:").pack(anchor=tk.W)
+        
+        self.collection_var = tk.StringVar()
+        self.collection_combo = ttk.Combobox(
+            collection_frame,
+            textvariable=self.collection_var,
+            state="disabled",
+            width=57
+        )
+        self.collection_combo.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(collection_frame, text="Number of Posts (leave empty for all):").pack(anchor=tk.W, pady=(10, 0))
+        
+        self.amount_entry = ttk.Entry(collection_frame, width=20)
+        self.amount_entry.pack(anchor=tk.W, pady=5)
+        self.amount_entry.insert(0, "")
+        
         # Buttons
         button_frame = ttk.Frame(self.root, padding="10")
         button_frame.pack(fill=tk.X)
         
         self.download_btn = ttk.Button(
             button_frame,
-            text="⬇️  Download Saved Posts",
-            command=self.start_download
+            text="⬇️  Download Selected Collection",
+            command=self.start_download,
+            state=tk.DISABLED
         )
         self.download_btn.pack(side=tk.LEFT, padx=5)
         
@@ -143,16 +179,123 @@ class InstagramDownloaderGUI:
             self.progress_var.set(percentage)
         self.root.update_idletasks()
     
-    def start_download(self):
-        """Start the download process in a separate thread."""
+    def fetch_collections(self):
+        """Fetch collections from Instagram."""
         sessionid = self.session_entry.get().strip()
         
         if not sessionid:
             messagebox.showerror("Error", "Please enter your Instagram session ID")
             return
         
+        # Disable login button
+        self.login_btn.config(state=tk.DISABLED)
+        
+        # Clear log
+        self.log_text.config(state=tk.NORMAL)
+        self.log_text.delete(1.0, tk.END)
+        self.log_text.config(state=tk.DISABLED)
+        
+        # Start fetch in thread
+        thread = threading.Thread(target=self.fetch_collections_worker, args=(sessionid,))
+        thread.daemon = True
+        thread.start()
+    
+    def fetch_collections_worker(self, sessionid):
+        """Worker function to fetch collections."""
+        try:
+            # Login
+            self.log("🔐 Logging in to Instagram...")
+            self.update_status("Logging in...")
+            
+            self.ig_client = InstagramClient()
+            if not self.ig_client.login_with_session(sessionid):
+                self.log("❌ Login failed! Please check your session ID.")
+                messagebox.showerror("Login Failed", "Invalid session ID or login failed")
+                self.root.after(0, lambda: self.login_btn.config(state=tk.NORMAL))
+                return
+            
+            username = self.ig_client.get_username()
+            self.log(f"✅ Successfully logged in as @{username}")
+            
+            # Fetch collections
+            self.log("📂 Fetching your collections...")
+            self.update_status("Fetching collections...")
+            
+            self.fetcher = SavedMediaFetcher(self.ig_client.get_client())
+            self.collections = self.fetcher.get_collections()
+            
+            if not self.collections:
+                self.log("⚠️  No collections found")
+                messagebox.showwarning("No Collections", "No collections found in your account")
+                self.root.after(0, lambda: self.login_btn.config(state=tk.NORMAL))
+                return
+            
+            self.log(f"✅ Found {len(self.collections)} collections")
+            
+            # Update UI with collections
+            self.root.after(0, self.populate_collections)
+            
+        except Exception as e:
+            self.log(f"❌ Error: {str(e)}")
+            messagebox.showerror("Error", str(e))
+            self.root.after(0, lambda: self.login_btn.config(state=tk.NORMAL))
+    
+    def populate_collections(self):
+        """Populate the collection dropdown with fetched collections."""
+        collection_names = []
+        
+        # Add "All Saved Posts" option
+        collection_names.append("All Saved Posts (download everything)")
+        
+        # Add other collections
+        for col in self.collections:
+            name = col.get('name', 'Unnamed')
+            count = col.get('count', 0)
+            collection_names.append(f"{name} ({count} posts)")
+        
+        self.collection_combo['values'] = collection_names
+        self.collection_combo.current(0)  # Select first option by default
+        self.collection_combo.config(state="readonly")
+        
+        # Enable download button
+        self.download_btn.config(state=tk.NORMAL)
+        
+        self.log("\n📌 Select a collection and click Download\n")
+        self.update_status("Ready to download")
+    
+    def start_download(self):
+        """Start the download process in a separate thread."""
+        if not self.ig_client or not self.fetcher:
+            messagebox.showerror("Error", "Please login and fetch collections first")
+            return
+        
         if self.is_downloading:
             messagebox.showwarning("Warning", "Download already in progress")
+            return
+        
+        # Get selected collection
+        selected_index = self.collection_combo.current()
+        if selected_index < 0:
+            messagebox.showerror("Error", "Please select a collection")
+            return
+        
+        # Determine collection ID
+        if selected_index == 0:
+            collection_id = None  # All saved posts
+            collection_name = "All Saved Posts"
+        else:
+            collection_id = self.collections[selected_index - 1].get('id')
+            collection_name = self.collections[selected_index - 1].get('name')
+        
+        # Get amount
+        amount_text = self.amount_entry.get().strip()
+        try:
+            amount = int(amount_text) if amount_text else 0
+            if amount < 0:
+                messagebox.showerror("Error", "Amount must be a positive number")
+                return
+        except ValueError:
+            messagebox.showerror("Error", "Please enter a valid number for amount")
             return
         
         # Disable download button, enable stop button
@@ -166,7 +309,7 @@ class InstagramDownloaderGUI:
         self.log_text.config(state=tk.DISABLED)
         
         # Start download in thread
-        thread = threading.Thread(target=self.download_worker, args=(sessionid,))
+        thread = threading.Thread(target=self.download_worker, args=(collection_id, collection_name, amount))
         thread.daemon = True
         thread.start()
     
@@ -178,7 +321,7 @@ class InstagramDownloaderGUI:
         self.download_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
     
-    def download_worker(self, sessionid):
+    def download_worker(self, collection_id, collection_name, amount):
         """Worker function to handle the download process."""
         try:
             # Ensure directories
@@ -188,26 +331,18 @@ class InstagramDownloaderGUI:
             # Initialize tracker
             tracker = DownloadTracker(self.data_dir)
             
-            # Login
-            self.log("🔐 Logging in to Instagram...")
-            self.update_status("Logging in...")
+            # Fetch saved posts from selected collection
+            self.log(f"📥 Fetching posts from '{collection_name}'...")
+            if amount > 0:
+                self.log(f"   Limit: {amount} posts")
+            self.update_status(f"Fetching posts from {collection_name}...")
             
-            ig_client = InstagramClient()
-            if not ig_client.login_with_session(sessionid):
-                self.log("❌ Login failed! Please check your session ID.")
-                messagebox.showerror("Login Failed", "Invalid session ID or login failed")
-                self.stop_download()
-                return
-            
-            username = ig_client.get_username()
-            self.log(f"✅ Successfully logged in as @{username}")
-            
-            # Fetch saved posts
-            self.log("📥 Fetching saved posts...")
-            self.update_status("Fetching saved posts...")
-            
-            fetcher = SavedMediaFetcher(ig_client.get_client())
-            saved_medias = fetcher.fetch_all_saved_medias()
+            if collection_id is None:
+                # Fetch all saved posts
+                saved_medias = self.fetcher.fetch_all_saved_medias()
+            else:
+                # Fetch from specific collection
+                saved_medias = self.fetcher.fetch_collection_medias(collection_id, amount)
             
             if not saved_medias:
                 self.log("⚠️  No saved posts found")
@@ -238,11 +373,11 @@ class InstagramDownloaderGUI:
                 self.stop_download()
                 return
             
-            self.log(f"\n⬇️  Downloading {len(to_download)} new posts...\n")
+            self.log(f"\n⬇️  Downloading {len(to_download)} new posts from '{collection_name}'...\n")
             self.update_status(f"Downloading {len(to_download)} posts...")
             
             # Initialize downloader
-            downloader = MediaDownloader(ig_client.get_client(), self.downloads_dir)
+            downloader = MediaDownloader(self.ig_client.get_client(), self.downloads_dir)
             metadata_extractor = MetadataExtractor(self.downloads_dir / "metadata")
             
             # Download statistics
